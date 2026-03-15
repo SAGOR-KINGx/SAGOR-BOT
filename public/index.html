@@ -1,0 +1,302 @@
+<!DOCTYPE html><html><head><meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0"><title>GOATBOT DASHBOARD</title><script src="https://cdn.jsdelivr.net/npm/chart.js"></script><style>
+
+body{
+background:#020617;
+color:#00ff9c;
+font-family:monospace;
+margin:0;
+}
+
+header{
+text-align:center;
+padding:12px;
+font-size:20px;
+}
+
+/* GRID */
+
+.grid{
+display:grid;
+grid-template-columns:repeat(auto-fit,minmax(140px,1fr));
+gap:10px;
+padding:10px;
+}
+
+/* WIDGET */
+
+.widget{
+background:black;
+border:1px solid #00ff9c;
+padding:10px;
+text-align:center;
+cursor:pointer;
+transition:.25s;
+}
+
+.widget:hover{
+box-shadow:0 0 10px #00ff9c;
+transform:translateY(-2px);
+}
+
+/* TERMINAL */
+
+.terminal{
+background:black;
+border:1px solid #00ff9c;
+padding:8px;
+height:240px;
+overflow:auto;
+font-size:12px;
+}
+
+/* BOX */
+
+.box{
+background:black;
+border:1px solid #00ff9c;
+padding:8px;
+max-height:160px;
+overflow:auto;
+display:none;
+margin-bottom:10px;
+}
+
+button{
+background:#00ff9c;
+border:none;
+padding:8px;
+cursor:pointer;
+font-weight:bold;
+}
+
+button:hover{
+box-shadow:0 0 10px #00ff9c;
+}
+
+input{
+width:100%;
+padding:6px;
+background:black;
+color:#00ff9c;
+border:1px solid #00ff9c;
+margin-bottom:8px;
+}
+
+.online{color:#00ff00}
+.offline{color:red}
+
+canvas{
+padding:10px;
+}
+
+/* MOBILE */
+
+@media(max-width:768px){
+
+.grid{
+grid-template-columns:1fr 1fr;
+}
+
+.terminal{
+height:200px;
+}
+
+}
+
+</style></head><body><header>
+⚡ GOATBOT CONTROL PANEL
+</header><div class="grid"><div class="widget">CPU<p id="cpu"></p></div><div class="widget">RAM<p id="ram"></p></div><div class="widget">PING<p id="ping"></p></div><div class="widget">TEMP<p id="temp"></p></div><div class="widget">UPTIME<p id="uptime"></p></div><div class="widget">ACTIVITY<p id="activity"></p></div><div class="widget" onclick="toggleCmd()">
+COMMANDS
+<p id="commandsCount"></p>
+</div><div class="widget" onclick="toggleEvent()">
+EVENTS
+<p id="eventsCount"></p>
+</div><div class="widget">
+STATUS
+<p id="status"></p>
+</div><div class="widget">
+<button onclick="restartBot()">RESTART</button>
+</div></div><canvas id="chart"></canvas>
+
+<div style="padding:10px"><h3>Command List</h3><input id="search" placeholder="Search command"><div class="box" id="cmdBox">
+<ul id="cmdList"></ul>
+</div><h3>Event List</h3><div class="box" id="eventBox">
+<ul id="eventList"></ul>
+</div><h3>Live Logs</h3><div class="terminal" id="logs"></div></div><script>
+
+/* GRAPH */
+
+let cpuData=[];
+let ramData=[];
+let labels=[];
+
+const chart=new Chart(document.getElementById("chart"),{
+
+type:"line",
+
+data:{
+labels:labels,
+datasets:[
+{label:"CPU",data:cpuData,borderColor:"#00ff9c"},
+{label:"RAM",data:ramData,borderColor:"#ff00ff"}
+]
+}
+
+});
+
+/* STATUS */
+
+async function loadStatus(){
+
+const res=await fetch("/api/status");
+const data=await res.json();
+
+document.getElementById("cpu").innerText=data.cpu;
+document.getElementById("ram").innerText=data.ram+" MB";
+
+document.getElementById("ping").innerText=data.ping+" ms";
+document.getElementById("temp").innerText=data.temp+" °C";
+
+document.getElementById("uptime").innerText=data.uptime+" s";
+document.getElementById("activity").innerText=data.activity;
+
+document.getElementById("commandsCount").innerText=data.commandsCount;
+document.getElementById("eventsCount").innerText=data.eventsCount;
+
+document.getElementById("status").innerHTML=
+data.online
+? '<span class="online">ONLINE</span>'
+: '<span class="offline">OFFLINE</span>';
+
+/* COMMAND LIST */
+
+const cmdList=document.getElementById("cmdList");
+cmdList.innerHTML="";
+
+data.commands.forEach(cmd=>{
+const li=document.createElement("li");
+li.textContent=cmd;
+cmdList.appendChild(li);
+});
+
+/* EVENT LIST */
+
+const eventList=document.getElementById("eventList");
+eventList.innerHTML="";
+
+data.events.forEach(ev=>{
+const li=document.createElement("li");
+li.textContent=ev;
+eventList.appendChild(li);
+});
+
+labels.push("");
+
+cpuData.push(data.cpu);
+ramData.push(data.ram);
+
+if(labels.length>25){
+labels.shift();
+cpuData.shift();
+ramData.shift();
+}
+
+chart.update();
+
+}
+
+/* LOG SYSTEM */
+
+let lastCount=0;
+let autoScroll=true;
+
+const logBox=document.getElementById("logs");
+
+logBox.addEventListener("scroll",()=>{
+
+const nearBottom=
+logBox.scrollHeight-logBox.scrollTop
+<=logBox.clientHeight+5;
+
+autoScroll=nearBottom;
+
+});
+
+function rgb(){
+return `rgb(${Math.random()*255},
+${Math.random()*255},
+${Math.random()*255})`;
+}
+
+async function loadLogs(){
+
+const res=await fetch("/api/logs");
+const data=await res.json();
+
+for(let i=lastCount;i<data.length;i++){
+
+const div=document.createElement("div");
+
+div.textContent=data[i];
+div.style.color=rgb();
+
+logBox.appendChild(div);
+
+}
+
+lastCount=data.length;
+
+if(autoScroll)
+logBox.scrollTop=logBox.scrollHeight;
+
+}
+
+/* SEARCH */
+
+document.getElementById("search")
+.addEventListener("keyup",function(){
+
+const val=this.value.toLowerCase();
+
+document.querySelectorAll("#cmdList li")
+.forEach(li=>{
+
+li.style.display=
+li.textContent.toLowerCase()
+.includes(val)
+?"block":"none";
+
+});
+
+});
+
+/* TOGGLE */
+
+function toggleCmd(){
+const box=document.getElementById("cmdBox");
+box.style.display=
+box.style.display==="block"?"none":"block";
+}
+
+function toggleEvent(){
+const box=document.getElementById("eventBox");
+box.style.display=
+box.style.display==="block"?"none":"block";
+}
+
+/* RESTART */
+
+async function restartBot(){
+await fetch("/api/restart");
+}
+
+/* REFRESH */
+
+setInterval(loadStatus,3000);
+setInterval(loadLogs,1200);
+
+loadStatus();
+loadLogs();
+
+</script></body></html>
