@@ -53,6 +53,7 @@
                 "qrcode-reader": "^1.0.4",
                 "qs": "^6.11.0",
                 "request": "^2.88.2",
+                "sagor-fca": "^0.0.3",
                 "sagor-nx-fca": "^0.0.2",
                 "sagor-video-downloader": "^1.2.1",
                 "searchitunes": "^2.5.4",
