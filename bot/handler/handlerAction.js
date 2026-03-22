@@ -1,15 +1,151 @@
 const createFuncMessage = global.utils.message;
 const handlerCheckDB = require("./handlerCheckData.js");
 
+const REACTION_COMMANDS = {
+	kick:    ["🦵","🖕","🦿","🦶","⛔"],
+	unsend:  ["😠", "😡", "😾", "🤬"],
+	mute:    "🔇",
+	unmute:  "🔊",
+	warn:    "⚠️",
+	ban:     "🚫",
+	unban:   "🔓"
+};
+
 module.exports = (api, threadModel, userModel, dashBoardModel, globalModel, usersData, threadsData, dashBoardData, globalData) => {
-	const handlerEvents = require(process.env.NODE_ENV == 'development' ? "./handlerEvents.dev.js" : "./handlerEvents.js")(api, threadModel, userModel, dashBoardModel, globalModel, usersData, threadsData, dashBoardData, globalData);
-		// সব কমান্ডের নাম লোড করার ফাংশন
+
+	const handlerEvents = require(
+		process.env.NODE_ENV === "development" ? "./handlerEvents.dev.js" : "./handlerEvents.js"
+	)(api, threadModel, userModel, dashBoardModel, globalModel, usersData, threadsData, dashBoardData, globalData);
+
+	const reactionCooldowns = new Map();
+	const COOLDOWN_MS = 4500;
+
+	const isBotAdmin = (userID) => global.GoatBot.config.adminBot.includes(userID);
+	async function handleReactionCommand(event, message) {
+		const { threadID, userID, messageID, reaction } = event;
+
+		const allReactions = Object.values(REACTION_COMMANDS).flat();
+		if (!allReactions.includes(reaction)) return;
+
+
+		if (!isBotAdmin(userID)) return;
+
+
+		let targetID;
+		try {
+				const msgInfo = await api.getMessageInfo(messageID, threadID);
+				targetID = msgInfo.senderID;
+		} catch (e) {
+				return;
+		}
+
+		const key = `${threadID}_${userID}`;
+		const now = Date.now();
+		if (now - (reactionCooldowns.get(key) || 0) < COOLDOWN_MS) return;
+		reactionCooldowns.set(key, now);
+
+		if (reaction !== REACTION_COMMANDS.unban) {
+			if (targetID === userID || isBotAdmin(targetID)) {
+				return message.send("❌ You cannot target yourself or another admin.");
+			}
+		}
+
+		if (REACTION_COMMANDS.kick.includes(reaction)) {
+			try {
+				await api.removeUserFromGroup(targetID, threadID);
+				api.setMessageReaction("✅", messageID, () => {}, true);
+			} catch (err) {
+				await message.send(`Kick failed: ${err.message}`);
+			}
+			return;
+		}
+
+		if (REACTION_COMMANDS.unsend.includes(reaction)) {
+			try {
+				await api.unsendMessage(messageID);
+			} catch (err) {}
+			return;
+		}
+
+		if (reaction === REACTION_COMMANDS.mute) {
+			try {
+				await api.removeUserFromGroup(targetID, threadID);
+				const data = await threadsData.get(threadID) || {};
+				data.muted = data.muted || [];
+				if (!data.muted.includes(targetID)) {
+					data.muted.push(targetID);
+					await threadsData.set(threadID, data);
+				}
+				api.setMessageReaction("✅", messageID, () => {}, true);
+				await message.send(`🔇 <@${targetID}> muted.`);
+			} catch (err) {
+				await message.send(`Mute failed.`);
+			}
+			return;
+		}
+
+		if (reaction === REACTION_COMMANDS.unmute) {
+			try {
+				const data = await threadsData.get(threadID) || {};
+				data.muted = (data.muted || []).filter(id => id !== targetID);
+				await threadsData.set(threadID, data);
+				api.setMessageReaction("✅", messageID, () => {}, true);
+				await message.send(`🔊 <@${targetID}> unmuted.`);
+			} catch (err) {}
+			return;
+		}
+
+		if (reaction === REACTION_COMMANDS.warn) {
+			try {
+				const data = await threadsData.get(threadID) || {};
+				data.warns = data.warns || {};
+				data.warns[targetID] = (data.warns[targetID] || 0) + 1;
+				const count = data.warns[targetID];
+				await threadsData.set(threadID, data);
+
+				if (count >= 3) {
+					await api.removeUserFromGroup(targetID, threadID);
+					await message.send(`🚨 <@${targetID}> kicked for 3 warnings.`);
+					delete data.warns[targetID];
+					await threadsData.set(threadID, data);
+				} else {
+					await message.send(`⚠️ Warning [${count}/3] for <@${targetID}>`);
+				}
+			} catch (err) {}
+			return;
+		}
+
+		if (reaction === REACTION_COMMANDS.ban) {
+			try {
+				await api.removeUserFromGroup(targetID, threadID);
+				const data = await threadsData.get(threadID) || {};
+				data.banned = data.banned || [];
+				if (!data.banned.includes(targetID)) {
+					data.banned.push(targetID);
+					await threadsData.set(threadID, data);
+				}
+				api.setMessageReaction("✅", messageID, () => {}, true);
+				await message.send(`🚫 <@${targetID}> banned.`);
+			} catch (err) {}
+			return;
+		}
+
+		if (reaction === REACTION_COMMANDS.unban) {
+			try {
+				const data = await threadsData.get(threadID) || {};
+				data.banned = (data.banned || []).filter(id => id !== targetID);
+				await threadsData.set(threadID, data);
+				api.setMessageReaction("✅", messageID, () => {}, true);
+				await message.send(`🔓 <@${targetID}> unbanned.`);
+			} catch (err) {}
+			return;
+		}
+	}
 const getAllCommandNames = () => {
 		const commandNames = [];
 		for (const cmd of global.GoatBot.commands.values()) {
 			if (cmd.config && cmd.config.name) {
 				commandNames.push(cmd.config.name.toLowerCase());
-				// যদি aliases থাকে, সেগুলোও যোগ করুন
 				if (cmd.config.aliases && Array.isArray(cmd.config.aliases)) {
 					commandNames.push(...cmd.config.aliases.map(a => a.toLowerCase()));
 				}
@@ -17,97 +153,46 @@ const getAllCommandNames = () => {
 		}
 		return commandNames;
 	};
-	return async function (event) {
-		// Check if the bot is in the inbox and anti inbox is enabled
-		if (
-			global.GoatBot.config.antiInbox == true &&
-			(event.senderID == event.threadID || event.userID == event.senderID || event.isGroup == false) &&
-			(event.senderID || event.userID || event.isGroup == false)
-		)
-			return;
+	return async function mainEventHandler(event) {
+		if (global.GoatBot.config.antiInbox === true && (event.senderID === event.threadID || event.isGroup === false)) return;
 
 		const message = createFuncMessage(api, event);
-		
-		// --- [ START: IMPROVED NO PREFIX SYSTEM ] ---
-		// No Prefix মোড চেক এবং শুধুমাত্র নির্দিষ্ট কমান্ডের জন্য প্রিফিক্স যোগ করা
+
 		if (global.GoatBot.config.noPrefixMode && event.body && !event.body.startsWith(global.GoatBot.config.prefix)) {
 			const messageBody = event.body.trim().toLowerCase();
 			const commandNames = getAllCommandNames();
 
-			// মেসেজের প্রথম শব্দটি বের করা
 			const firstWord = messageBody.split(/\s+/)[0] || '';
 
-			// চেক করা যে প্রথম শব্দটি কোনো কমান্ডের নাম কিনা
 			if (commandNames.includes(firstWord)) {
-				// শুধুমাত্র ম্যাচ করা কমান্ডের জন্য প্রিফিক্স যোগ করা
+
 				event.body = global.GoatBot.config.prefix + event.body;
 				console.log(`No Prefix: Command "${firstWord}" detected, prefix added`);
 			}
-			// এলোমেলো টেক্সট, ইমোজি, লিংক ইগনোর করা হবে
-		}
-		// --- [ END: IMPROVED NO PREFIX SYSTEM ] ---
+	}
+		await handlerCheckDB(usersData, threadsData, event, api);
 
-		await handlerCheckDB(usersData, threadsData, event);
-		const handlerChat = await handlerEvents(event, message);
-		if (!handlerChat)
-			return;
+		const handlers = await handlerEvents(event, message);
+		if (!handlers) return;
 
-		const {
-			onAnyEvent, onFirstChat, onStart, onChat,
-			onReply, onEvent, handlerEvent, onReaction,
-			typ, presence, read_receipt
-		} = handlerChat;
+		handlers.onAnyEvent();
 
-
-		onAnyEvent();
 		switch (event.type) {
 			case "message":
 			case "message_reply":
-			case "message_unsend":
-				onFirstChat();
-				onChat();
-				onStart();
-				onReply();
+				handlers.onFirstChat();
+				handlers.onChat();
+				handlers.onStart();
+				handlers.onReply();
 				break;
 			case "event":
-				handlerEvent();
-				onEvent();
+				handlers.handlerEvent();
+				handlers.onEvent();
 				break;
 			case "message_reaction":
-				onReaction();
-				const { delete: del, kick } = global.GoatBot.config?.reactBy;
-
-        if (del.includes(event.reaction)) {
-       if (event.senderID === api.getCurrentUserID()) {
-				 if ( global.GoatBot.config?.adminBot?.includes(event.userID)
-            ) {
-              api.unsendMessage(event.messageID);
-            }
-          }
-				}
-				if (kick.includes(event.reaction)){
-					if ( global.GoatBot.config?.adminBot?.includes(event.userID)
-            ) {
-				api.removeUserFromGroup(event.senderID, event.threadID, (err) => { if (err) return console.log(err) });
-					}
-				}
+				handlers.onReaction();
+				await handleReactionCommand(event, message);
 				break;
-			case "typ":
-				typ();
-				break;
-			case "presence":
-				presence();
-				break;
-			case "read_receipt":
-				read_receipt();
-				break;
-			// case "friend_request_received":
-			// { /* code block */ }
-			// break;
-
-			// case "friend_request_cancel"
-			// { /* code block */ }
-			// break;
 			default:
 				break;
 		}
