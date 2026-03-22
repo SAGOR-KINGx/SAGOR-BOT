@@ -11,55 +11,41 @@
   "antiInbox": false,
   "language": "en",
   "nickNameBot": "🐥 SaGor 🐥",
-  "prefix": ".",
+  "prefix": ",",
+  "adminPrefix": "!",
   "adminOnly": {
     "enable": false,
     "ignoreCommand": []
   },
   "adminBot": [
     "61581197276223"
-],
- "premiumUsers": [
+  ],
+  "premiumUsers": [
     "61581197276223"
-],
+  ],
   "devUsers": [
     "61581197276223"
-],
+  ],
   "vipUsers": [
     "61581197276223"
-],
+  ],
   "modUsers": [
     "61581197276223"
-],
+  ],
   "supportUsers": [
     "61581197276223"
-],
+  ],
   "managerUsers": [
     "61581197276223"
-],
+  ],
   "rootOwner": [
     "61581197276223"
-],
-  "reactBy": {
-    "delete": [
-      "😡",
-      "😾",
-      "😠",
-      "😤"
     ],
-    "kick": [
-      "🦶",
-      "⚠️",
-      "🖕",
-      "🦵",
-      "🚫"
-    ]
-  },
   "whiteListMode": {
     "enable": false,
     "whiteListIds": [
       "61581197276223"
-]
+    ]
   },
   "whiteListModeThread": {
     "enable": false,
@@ -72,7 +58,7 @@
     "uriMongodb": "",
     "autoSyncWhenStart": false,
     "autoRefreshThreadInfoFirstTime": true
- },
+  },
   "timeZone": "Asia/Dhaka",
   "dashBoard": {
     "enable": true,
@@ -95,17 +81,17 @@
   },
   "autoRestart": {
     "time": null
- },
+  },
   "autoUptime": {
     "enable": false,
     "timeInterval": 180,
     "url": ""
- },
+  },
   "autoLoadScripts": {
     "enable": false,
     "ignoreCmds": "",
     "ignoreEvents": ""
-},
+  },
   "autoRefreshFbstate": true,
   "autoReloginWhenChangeAccount": false,
   "autoRestartWhenListenMqttError": false,
@@ -120,11 +106,11 @@
       "enable": false,
       "botToken": "",
       "chatId": ""
- },
+    },
     "discordHook": {
       "enable": false,
       "webhookUrl": ""
-      }
+    }
   },
   "hideNotiMessage": {
     "commandNotFound": false,
